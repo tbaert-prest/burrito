@@ -2,6 +2,7 @@ package event_test
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"testing"
 
@@ -25,20 +26,11 @@ var cfg *rest.Config
 var k8sClient client.Client
 var testEnv *envtest.Environment
 
-const testTime = "Sun May  8 11:21:53 UTC 2023"
-
 func TestLayer(t *testing.T) {
 	RegisterFailHandler(Fail)
 
 	RunSpecs(t, "Webhook Handler Suite")
 }
-
-// type MockClock struct{}
-
-// func (m *MockClock) Now() time.Time {
-// 	t, _ := time.Parse(time.UnixDate, testTime)
-// 	return t
-// }
 
 var _ = BeforeSuite(func() {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
@@ -109,22 +101,20 @@ var PushEventMultiplePathChanges = event.PushEvent{
 		ShaAfter:  "6c193d9cad1ddafdb31ff9f733630da9705bfd64",
 	},
 	Changes: []string{
-		"modules/random-pets/variables.tf",
-		"nominal-case-one/main.tf",
-		"terragrunt/nominal-case-two/prod/inputs.hcl",
-		"terragrunt/nominal-case-two/module.hcl",
+		"layer-path-changed-2/variables.tf",
+		"layer-path-changed-3/inputs.hcl",
 	},
 }
 
-var PullRequestEventNotAffected = event.PullRequestEvent{
-	Provider: "github",
-	URL:      "https://github.com/example/repo",
-	Revision: "feature/branch",
-	Base:     "main",
-	Action:   "opened",
-	ID:       "42",
-	Commit:   "5b2c5e5c6699bf2bf93138205565b85193996572",
-}
+// var PullRequestEventNotAffected = event.PullRequestEvent{
+// 	Provider: "github",
+// 	URL:      "https://github.com/example/repo",
+// 	Revision: "feature/branch",
+// 	Base:     "main",
+// 	Action:   "opened",
+// 	ID:       "42",
+// 	Commit:   "5b2c5e5c6699bf2bf93138205565b85193996572",
+// }
 
 var PullRequestEventSingleAffected = event.PullRequestEvent{
 	Provider: "github",
@@ -162,9 +152,19 @@ var _ = Describe("Webhook", func() {
 					}, layer)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(handleErr).NotTo(HaveOccurred())
-					//TODO: Maybe implement a test on a layer that already has the annotation
 					_, ok := layer.Annotations[annotations.LastRelevantCommit]
 					Expect(ok).To(BeFalse())
+					Expect(layer.Annotations[annotations.LastBranchCommit]).To(Equal(PushEventNoChanges.ChangeInfo.ShaAfter))
+				})
+				It("should not have changed the LastRelevantCommit annotation", func() {
+					layer := &configv1alpha1.TerraformLayer{}
+					err := k8sClient.Get(context.TODO(), types.NamespacedName{
+						Namespace: "default",
+						Name:      "no-path-changed-2",
+					}, layer)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(handleErr).NotTo(HaveOccurred())
+					Expect(layer.Annotations[annotations.LastRelevantCommit]).To(Not(Equal(PushEventNoChanges.ChangeInfo.ShaAfter)))
 					Expect(layer.Annotations[annotations.LastBranchCommit]).To(Equal(PushEventNoChanges.ChangeInfo.ShaAfter))
 				})
 			})
@@ -196,8 +196,8 @@ var _ = Describe("Webhook", func() {
 					}, layer)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(handleErr).NotTo(HaveOccurred())
-					Expect(layer.Annotations[annotations.LastBranchCommit]).To(Equal(PushEventLayerPathChanges.ChangeInfo.ShaAfter))
-					Expect(layer.Annotations[annotations.LastRelevantCommit]).To(Equal(PushEventLayerPathChanges.ChangeInfo.ShaAfter))
+					Expect(layer.Annotations[annotations.LastBranchCommit]).To(Equal(PushEventAdditionalPathChanges.ChangeInfo.ShaAfter))
+					Expect(layer.Annotations[annotations.LastRelevantCommit]).To(Equal(PushEventAdditionalPathChanges.ChangeInfo.ShaAfter))
 				})
 				// TODO: make this test pass
 				// It("should have updated commit annotations for a relative change path", func() {
@@ -208,52 +208,83 @@ var _ = Describe("Webhook", func() {
 				// 	}, layer)
 				// 	Expect(err).NotTo(HaveOccurred())
 				// 	Expect(handleErr).NotTo(HaveOccurred())
-				// 	Expect(layer.Annotations[annotations.LastBranchCommit]).To(Equal(PushEventLayerPathChanges.ChangeInfo.ShaAfter))
-				// 	Expect(layer.Annotations[annotations.LastRelevantCommit]).To(Equal(PushEventLayerPathChanges.ChangeInfo.ShaAfter))
+				// 	Expect(layer.Annotations[annotations.LastBranchCommit]).To(Equal(PushEventAdditionalPathChanges.ChangeInfo.ShaAfter))
+				// 	Expect(layer.Annotations[annotations.LastRelevantCommit]).To(Equal(PushEventAdditionalPathChanges.ChangeInfo.ShaAfter))
 				// })
 			})
 			Describe("Multiple paths have been modified", Ordered, func() {
-
+				BeforeAll(func() {
+					handleErr = PushEventMultiplePathChanges.Handle(k8sClient)
+				})
+				It("should have updated commit annotations for layer-path-changed-2", func() {
+					layer := &configv1alpha1.TerraformLayer{}
+					err := k8sClient.Get(context.TODO(), types.NamespacedName{
+						Namespace: "default",
+						Name:      "layer-path-changed-2",
+					}, layer)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(handleErr).NotTo(HaveOccurred())
+					Expect(layer.Annotations[annotations.LastBranchCommit]).To(Equal(PushEventMultiplePathChanges.ChangeInfo.ShaAfter))
+					Expect(layer.Annotations[annotations.LastRelevantCommit]).To(Equal(PushEventMultiplePathChanges.ChangeInfo.ShaAfter))
+				})
+				It("should have updated commit annotations for layer-path-changed-3", func() {
+					layer := &configv1alpha1.TerraformLayer{}
+					err := k8sClient.Get(context.TODO(), types.NamespacedName{
+						Namespace: "default",
+						Name:      "layer-path-changed-3",
+					}, layer)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(handleErr).NotTo(HaveOccurred())
+					Expect(layer.Annotations[annotations.LastBranchCommit]).To(Equal(PushEventMultiplePathChanges.ChangeInfo.ShaAfter))
+					Expect(layer.Annotations[annotations.LastRelevantCommit]).To(Equal(PushEventMultiplePathChanges.ChangeInfo.ShaAfter))
+				})
 			})
 		})
 		Describe("PullRequest", func() {
+			// TODO
+			// Describe("No pull request have been created", Ordered, func() {})
 			Describe("A single pull request have been affected", Ordered, func() {
-
+				BeforeAll(func() {
+					handleErr = PullRequestEventSingleAffected.Handle(k8sClient)
+				})
+				It("should have created a TerraformPullRequest", func() {
+					pr := &configv1alpha1.TerraformPullRequest{}
+					err := k8sClient.Get(context.TODO(), types.NamespacedName{
+						Namespace: "default",
+						Name:      fmt.Sprintf("%s-%s", "burrito", PullRequestEventSingleAffected.ID),
+					}, pr)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(handleErr).NotTo(HaveOccurred())
+					Expect(pr.Annotations[annotations.LastBranchCommit]).To(Equal(PullRequestEventSingleAffected.Commit))
+				})
 			})
 			Describe("Multiple pull request have been affected", Ordered, func() {
-
+				BeforeAll(func() {
+					handleErr = PullRequestEventMultipleAffected.Handle(k8sClient)
+				})
+				It("should have created a TerraformPullRequest for other-repo-1", func() {
+					pr := &configv1alpha1.TerraformPullRequest{}
+					err := k8sClient.Get(context.TODO(), types.NamespacedName{
+						Namespace: "default",
+						Name:      fmt.Sprintf("%s-%s", "other-repo-1", PullRequestEventMultipleAffected.ID),
+					}, pr)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(handleErr).NotTo(HaveOccurred())
+					Expect(pr.Annotations[annotations.LastBranchCommit]).To(Equal(PullRequestEventMultipleAffected.Commit))
+				})
+				It("should have created a TerraformPullRequest for other-repo-2", func() {
+					pr := &configv1alpha1.TerraformPullRequest{}
+					err := k8sClient.Get(context.TODO(), types.NamespacedName{
+						Namespace: "default",
+						Name:      fmt.Sprintf("%s-%s", "other-repo-2", PullRequestEventMultipleAffected.ID),
+					}, pr)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(handleErr).NotTo(HaveOccurred())
+					Expect(pr.Annotations[annotations.LastBranchCommit]).To(Equal(PullRequestEventMultipleAffected.Commit))
+				})
 			})
 		})
-
-		// BeforeAll(func() {
-
-		// 	layer = &configv1alpha1.TerraformLayer{}
-		// 	getErr = k8sClient.Get(context.TODO(), types.NamespacedName{
-		// 		Namespace: "default",
-		// 		Name:      "test",
-		// 	}, layer)
-		// })
-		// It("should exists", func() {
-		// 	Expect(getErr).NotTo(HaveOccurred())
-		// })
-		// It("should not return an error when adding first annotation", func() {
-		// 	err := annotations.Add(context.TODO(), k8sClient, layer, map[string]string{annotations.LastPlanSum: "AuP6pMNxWsbSZKnxZvxD842wy0qaF9JCX8HW1nFeL1I"})
-		// 	Expect(err).NotTo(HaveOccurred())
-		// })
-		// It("should not return an error when adding second annotation", func() {
-		// 	err := annotations.Add(context.TODO(), k8sClient, layer, map[string]string{annotations.LastApplySum: "AuP6pMNxWsbSZKnxZvxD842wy0qaF9JCX8HW1nFeL1I"})
-		// 	Expect(err).NotTo(HaveOccurred())
-		// })
-		// It("should not return an error when removing second annotation", func() {
-		// 	err := annotations.Remove(context.TODO(), k8sClient, layer, annotations.LastApplySum)
-		// 	Expect(err).NotTo(HaveOccurred())
-		// })
 	})
-	// Describe("Pull Request Event", Ordered, func() {
-	// 	Describe("No Pull request have been created")
-	// 	Describe("A single pull request have been created")
-	// 	Describe("Multiple pull requests have been created")
-	// })
 })
 
 var _ = AfterSuite(func() {
