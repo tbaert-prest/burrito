@@ -73,6 +73,7 @@ type RepositoryConfig struct {
 
 type RunnerConfig struct {
 	Action                     string           `mapstructure:"action"`
+	Commit                     string           `mapstructure:"commit"`
 	Layer                      Layer            `mapstructure:"layer"`
 	Repository                 RepositoryConfig `mapstructure:"repository"`
 	SSHKnownHostsConfigMapName string           `mapstructure:"sshKnownHostsConfigMapName"`

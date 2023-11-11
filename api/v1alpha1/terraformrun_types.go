@@ -26,6 +26,7 @@ import (
 // TerraformRunSpec defines the desired state of TerraformRun
 type TerraformRunSpec struct {
 	Action string            `json:"action,omitempty"`
+	Commit string            `json:"commit,omitempty"`
 	Layer  TerraformRunLayer `json:"layer,omitempty"`
 }
 

@@ -11,19 +11,20 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func clone(repository config.RepositoryConfig, URL, branch, path string) (*git.Repository, error) {
-	cloneOptions, err := getCloneOptions(repository, URL, branch, path)
+func clone(repository config.RepositoryConfig, URL, ref string) (*git.Repository, error) {
+	cloneOptions, err := getCloneOptions(repository, URL, ref)
 	if err != nil {
 		return &git.Repository{}, err
 	}
 	return git.PlainClone(WorkingDir, false, cloneOptions)
 }
 
-func getCloneOptions(repository config.RepositoryConfig, URL, branch, path string) (*git.CloneOptions, error) {
+func getCloneOptions(repository config.RepositoryConfig, URL, ref string) (*git.CloneOptions, error) {
 	authMethod := "ssh"
 	cloneOptions := &git.CloneOptions{
-		ReferenceName: plumbing.NewBranchReferenceName(branch),
 		URL:           URL,
+		SingleBranch:  true,
+		ReferenceName: plumbing.ReferenceName(ref),
 	}
 	if strings.Contains(URL, "https://") {
 		authMethod = "https"

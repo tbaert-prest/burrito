@@ -61,16 +61,11 @@ func New(c *config.Config) *Runner {
 
 func (r *Runner) Exec() error {
 	var sum string
-	var commit string
 	ann := map[string]string{}
 
 	err := r.init()
 	if err != nil {
 		log.Errorf("error initializing runner: %s", err)
-	}
-	if r.gitRepository != nil {
-		ref, _ := r.gitRepository.Head()
-		commit = ref.Hash().String()
 	}
 
 	switch r.config.Runner.Action {
@@ -78,7 +73,7 @@ func (r *Runner) Exec() error {
 		sum, err = r.plan()
 		ann[annotations.LastPlanDate] = time.Now().Format(time.UnixDate)
 		if err == nil {
-			ann[annotations.LastPlanCommit] = commit
+			ann[annotations.LastPlanCommit] = r.config.Runner.Commit
 		}
 		ann[annotations.LastPlanSum] = sum
 	case "apply":
@@ -86,7 +81,7 @@ func (r *Runner) Exec() error {
 		ann[annotations.LastApplyDate] = time.Now().Format(time.UnixDate)
 		ann[annotations.LastApplySum] = sum
 		if err == nil {
-			ann[annotations.LastApplyCommit] = commit
+			ann[annotations.LastApplyCommit] = r.config.Runner.Commit
 		}
 	default:
 		err = errors.New("unrecognized runner action, if this is happening there might be a version mismatch between the controller and runner")
@@ -182,8 +177,8 @@ func (r *Runner) init() error {
 	}
 	log.Infof("kubernetes resources successfully retrieved")
 
-	log.Infof("cloning repository %s %s branch", r.repository.Spec.Repository.Url, r.layer.Spec.Branch)
-	r.gitRepository, err = clone(r.config.Runner.Repository, r.repository.Spec.Repository.Url, r.layer.Spec.Branch, r.layer.Spec.Path)
+	log.Infof("cloning repository %s on commit %s", r.repository.Spec.Repository.Url, r.config.Runner.Commit)
+	r.gitRepository, err = clone(r.config.Runner.Repository, r.repository.Spec.Repository.Url, r.config.Runner.Commit)
 	if err != nil {
 		r.gitRepository = nil // reset git repository for the caller
 		log.Errorf("error cloning repository: %s", err)
