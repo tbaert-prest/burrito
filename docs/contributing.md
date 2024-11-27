@@ -93,30 +93,30 @@ helm upgrade --install -n cert-manager --create-namespace cert-manager bitnami/c
     apiVersion: config.terraform.padok.cloud/v1alpha1
     kind: TerraformLayer
     metadata:
-        name: my-layer
-        namespace: burrito-project
+      name: my-layer
+      namespace: burrito-project
     spec:
-        branch: main
-        path: terraform/
-        repository:
+      branch: main
+      path: terraform/
+      repository:
         name: my-repository
         namespace: burrito-project
     ---
     apiVersion: config.terraform.padok.cloud/v1alpha1
     kind: TerraformRepository
     metadata:
-        name: my-repository
-        namespace: burrito-project
+      name: my-repository
+      namespace: burrito-project
     spec:
-        repository:
+      repository:
         url: https://github.com/padok-team/burrito-examples
-        remediationStrategy:
+      remediationStrategy:
         autoApply: true
-        terraform:
+      terraform:
         enabled: true
-        opentofu:
+      opentofu:
         enabled: false
-        terragrunt:
+      terragrunt:
         enabled: false
     ```
 
