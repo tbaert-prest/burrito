@@ -66,4 +66,21 @@ subjects:
 ---
 {{- end }}
 {{- end }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: burrito-controllers
+  labels:
+    {{- toYaml .Values.controllers.metadata.labels | nindent 4 }}
+  annotations:
+    {{- toYaml .Values.controllers.metadata.annotations | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: burrito-controllers
+subjects:
+  - kind: ServiceAccount
+    name: burrito-controllers
+    namespace: {{ $.Release.Namespace }}
+---
 {{- end }}
